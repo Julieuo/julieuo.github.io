@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>简谱乐队</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>简谱乐队</h1>
+    <p>上传乐队简谱，识别成文本，然后分声部练习或全部合奏。</p>
+  </header>
+
+  <main>
+    <section class="card" id="library-card" hidden>
+      <h2>我的谱子 <small>识别过、保存过的曲子，点“打开”直接用，不消耗 token</small></h2>
+      <ul class="library" id="library-list"></ul>
+    </section>
+
+    <section class="card" id="upload-card">
+      <h2><span class="step">1</span>上传简谱</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple hidden>
+        <span class="drop-main">点击选择，或把图片 / PDF 拖到这里</span>
+        <span class="drop-sub">支持 JPG、PNG、WebP、PDF；多页按顺序上传</span>
+      </label>
+      <ul class="files" id="file-list"></ul>
+      <label class="field">
+        <span>补充说明（可选）</span>
+        <textarea id="hint" rows="2" placeholder="例如：这是笛子和琵琶的总谱；只要第一页；第三行是第二页的接续"></textarea>
+      </label>
+      <div class="row">
+        <button class="primary" id="recognize-btn" disabled>开始识别</button>
+        <label class="check"><input type="checkbox" id="force"> 重新识别（不用已保存的结果）</label>
+        <span class="status" id="recognize-status"></span>
+      </div>
+      <details id="raw-wrap" hidden>
+        <summary>识别输出</summary>
+        <pre id="raw-output"></pre>
+      </details>
+      <div class="notes" id="recognize-notes" hidden></div>
+    </section>
+
+    <section class="card" id="text-card">
+      <h2><span class="step">2</span>简谱文本 <small>可以直接修改</small></h2>
+      <div class="row wrap">
+        <button id="example-btn">载入示例《大鱼》</button>
+        <button id="save-btn" disabled>保存到我的谱子</button>
+        <span class="save-state" id="save-state"></span>
+        <button id="download-btn" title="把文本框里的谱子存成 .txt 文件">下载谱子文本</button>
+        <button id="restore-btn" hidden>恢复识别前的文本</button>
+        <a href="FORMAT.md" target="_blank" rel="noopener">格式说明</a>
+        <span class="summary" id="parse-summary"></span>
+      </div>
+      <textarea id="editor" spellcheck="false" rows="16" placeholder="识别结果会出现在这里，也可以按格式说明手动输入。"></textarea>
+      <ul class="problems" id="problems"></ul>
+    </section>
+
+    <section class="card" id="play-card">
+      <h2><span class="step">3</span>演奏</h2>
+
+      <div class="transport">
+        <button class="primary big" id="play-btn" disabled>▶ 播放</button>
+        <button id="stop-btn" disabled>■ 停止</button>
+        <span class="count-badge" id="count-badge" hidden></span>
+        <span class="inline count-in-group">
+          <label class="check"><input type="checkbox" id="count-in" checked> 开始前预备</label>
+          <select id="count-in-len" title="预备拍的长度">
+            <option value="bar:1">一小节（按拍号）</option>
+            <option value="bar:2">两小节</option>
+            <option value="beats:1">1 拍</option>
+            <option value="beats:2">2 拍</option>
+            <option value="beats:3">3 拍</option>
+            <option value="beats:4">4 拍</option>
+            <option value="beats:5">5 拍</option>
+            <option value="beats:6">6 拍</option>
+            <option value="beats:7">7 拍</option>
+            <option value="beats:8">8 拍</option>
+            <option value="beats:12">12 拍</option>
+            <option value="beats:16">16 拍</option>
+          </select>
+        </span>
+        <label class="check"><input type="checkbox" id="metronome"> 播放时打拍子</label>
+        <label class="inline">速度
+          <input type="range" id="tempo" min="40" max="160" step="5" value="100">
+          <output id="tempo-out">100%</output>
+        </label>
+        <label class="inline">移调
+          <select id="transpose"></select>
+        </label>
+      </div>
+
+      <div class="timeline" id="timeline" aria-label="进度">
+        <div class="tl-track" id="tl-track">
+          <div class="tl-sel" id="tl-sel"></div>
+          <div class="tl-head" id="tl-head"></div>
+          <div class="tl-handle" id="tl-start" title="拖动设置起点"></div>
+          <div class="tl-handle" id="tl-end" title="拖动设置终点"></div>
+        </div>
+        <div class="tl-marks" id="tl-marks"></div>
+      </div>
+      <p class="hint">点进度条跳到那一小节；在进度条上拖一下选出要练的一段；拖两端的把手调整起点和终点。键盘：空格 播放 / 暂停，Esc 停止。</p>
+
+      <div class="row wrap range-row">
+        <span class="range">从第 <input type="number" id="from-bar" min="1" value="1"> 小节
+          到第 <input type="number" id="to-bar" min="1" value="1"> 小节</span>
+        <button id="range-all">整首</button>
+        <label class="inline">重复
+          <select id="repeat">
+            <option value="1">不重复</option>
+            <option value="2">2 遍</option>
+            <option value="3">3 遍</option>
+            <option value="4">4 遍</option>
+            <option value="5">5 遍</option>
+            <option value="10">10 遍</option>
+            <option value="0">一直循环</option>
+          </select>
+        </label>
+        <span id="position">—</span>
+      </div>
+      <div class="now" id="now-playing" hidden>
+        <div class="now-head">谱面 <span class="hint">跟着播放滚动；可以自己上下滑动看别处，几秒不动后再跟回来。</span>
+          <button id="now-back" class="now-back" hidden>回到演奏位置</button></div>
+        <div class="edit-bar" id="edit-bar">
+          <span class="edit-sel" id="edit-sel"></span>
+          <span class="edit-actions">
+            <button id="edit-copy-btn" class="toggle" disabled title="选中小节后点它，再点目标小节">复制到…</button>
+            <button id="edit-move-btn" class="toggle" disabled title="移到目标小节，原来的小节改为休止">移动到…</button>
+            <button id="edit-rest-btn" disabled title="把选中的小节改为休止">改为休止</button>
+            <button id="undo-btn" disabled title="撤销上一步谱面修改（⌘Z）">撤销</button>
+            <button id="redo-btn" disabled title="重做（⇧⌘Z）">重做</button>
+          </span>
+          <span class="edit-status" id="edit-status"></span>
+        </div>
+        <p class="hint edit-hint">改谱：点一个小节选中它（按住 Shift 再点可以多选几小节），把它拖到别的声部的小节上，这段旋律就复制过去了；按住 Option（Alt）拖是移动，原小节改为休止。改动会直接写进第 2 步的文本，记得保存。双击小节可以跳到文本里对应的那一行。</p>
+        <div id="now-rows"></div>
+        <p class="hint" id="now-empty" hidden>所有声部都静音了。</p>
+      </div>
+      <p class="hint" id="audio-note"></p>
+
+      <div class="parts-head">
+        <h3>声部</h3>
+        <div class="row wrap">
+          <button id="all-btn">全部合奏</button>
+          <span class="hint">点“独奏”只听这一个声部；可以同时独奏几个声部。播放中也能调。</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="parts">
+          <thead>
+            <tr><th>声部</th><th>乐器</th><th>八度</th><th>音量</th><th>静音</th><th>独奏</th></tr>
+          </thead>
+          <tbody id="parts-body"></tbody>
+        </table>
+      </div>
+
+      <h3>导出</h3>
+      <div class="row wrap">
+        <button id="midi-btn" disabled>导出 MIDI</button>
+        <button id="wav-btn" disabled>导出 WAV（当前混音）</button>
+        <button id="wav-each-btn" disabled>每个声部分别导出 WAV</button>
+        <button id="pdf-btn" disabled>导出 PDF（打印谱面）</button>
+        <span class="status" id="export-status"></span>
+      </div>
+      <p class="hint">导出只包含当前能听到的声部（考虑静音和独奏）；MIDI 和 WAV 只含所选的小节范围，PDF 是整首。导出 PDF 会打开打印对话框，在里面选“存储为 PDF”。</p>
+    </section>
+  </main>
+
+  <script>window.JIANPU_STATIC = true;</script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
