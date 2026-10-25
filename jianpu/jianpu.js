@@ -231,7 +231,10 @@ export function parseScore(text) {
         if (/^1\s*=/.test(d)) {
           const pc = keyToPc(d);
           if (pc === null) errors.push({ line: tok.line, msg: `调号 “${d}” 看不懂` });
-          else tonic = 60 + pc;
+          else {
+            tonic = 60 + pc;
+            part.sections.get(sec).push({ ...tok, keyChange: true }); // 留在 token 流里，谱面上才画得出 “1=G”
+          }
           continue;
         }
         if (/^q\s*=/i.test(d)) {
