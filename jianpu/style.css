@@ -255,9 +255,15 @@ body.printing #print-root {
 #print-root .sg-system { break-inside: avoid; page-break-inside: avoid; margin: 6px 0 22px; }
 #print-root .sg-bg.cur { background: none; }
 #print-root .jp-note { font-size: 16px; }
+/* 五线谱打印：OSMD 按 A4 分好页，每页一个 svg */
+body.printing #print-root.staff { width: 210mm; max-width: none; padding: 0; position: relative; }
+#print-root.staff .print-back { position: absolute; right: 8px; top: 8px; z-index: 5; }
+#print-root.staff #osmd svg { display: block; width: 210mm; height: 297mm; break-after: page; page-break-after: always; }
+#print-root.staff #osmd svg:last-child { break-after: auto; page-break-after: auto; }
 @media print {
   @page { margin: 12mm; }
   body { background: #fff; }
   #print-root .print-back { display: none; }
   body.printing #print-root { width: auto; padding: 0; }
+  body.printing #print-root.staff { width: 210mm; margin: 0; }
 }

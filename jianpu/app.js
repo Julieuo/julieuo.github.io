@@ -4,6 +4,7 @@ import { parseScore } from "./jianpu.js";
 import { Engine, INSTRUMENTS, defaultInstrument, isAudible } from "./audio.js";
 import { buildMidi } from "./midi.js";
 import { layoutBar } from "./render.js";
+import { buildMusicXml } from "./musicxml.js";
 
 const $ = (id) => document.getElementById(id);
 const engine = new Engine();
@@ -262,7 +263,7 @@ function onTextChanged() {
   updateRange();
   updateEditBar();
   const ok = !!state.score;
-  for (const id of ["play-btn", "midi-btn", "wav-btn", "wav-each-btn", "pdf-btn"]) $(id).disabled = !ok;
+  for (const id of ["play-btn", "midi-btn", "wav-btn", "wav-each-btn", "pdf-btn", "xml-btn", "staff-btn"]) $(id).disabled = !ok;
   if (!ok && engine.playing) stopPlayback();
 }
 
@@ -1607,6 +1608,72 @@ $("pdf-btn").addEventListener("click", () => {
 });
 window.addEventListener("afterprint", closePrintView);
 
+// ----- 五线谱：转成 MusicXML（MuseScore 等软件能打开），或用 OpenSheetMusicDisplay 排成五线谱打印 -----
+
+const OSMD_URL = "https://unpkg.com/opensheetmusicdisplay@2.2.1/build/opensheetmusicdisplay.min.js";
+let osmdLoading = null;
+function loadOsmd() {
+  if (window.opensheetmusicdisplay) return Promise.resolve();
+  osmdLoading ||= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = OSMD_URL;
+    s.onload = resolve;
+    s.onerror = () => { osmdLoading = null; reject(new Error("五线谱渲染库没能从网上加载")); };
+    document.head.append(s);
+  });
+  return osmdLoading;
+}
+
+function staffXml() {
+  const on = audibleParts(currentSettings());
+  if (!on.length) return null;
+  const names = on.map((i) => state.score.parts[i].name).join("、");
+  const all = on.length === state.score.parts.length;
+  return { xml: buildMusicXml(state.score, on, { title: all ? state.score.meta.title : `${state.score.meta.title || "简谱"}（${names}）` }), names };
+}
+
+$("xml-btn").addEventListener("click", () => {
+  const r = staffXml();
+  if (!r) return ($("export-status").textContent = "没有能听到的声部。");
+  download(new Blob([r.xml], { type: "application/vnd.recordare.musicxml+xml" }), `${fileBase()}-${r.names}.musicxml`);
+  $("export-status").textContent = "已导出 MusicXML，可以用 MuseScore 等软件打开。";
+});
+
+async function openStaffPrintView() {
+  if (!state.score) return null;
+  const r = staffXml();
+  if (!r) return null;
+  closePrintView();
+  const root = Object.assign(document.createElement("div"), { id: "print-root", className: "staff" });
+  const back = Object.assign(document.createElement("button"), { className: "print-back", textContent: "返回" });
+  back.onclick = closePrintView;
+  const box = Object.assign(document.createElement("div"), { id: "osmd" });
+  // OSMD 自己按 A4 分页，纸的边距由它留，打印时页边距设为 0 才正好一页一页对上
+  root.append(back, box, Object.assign(document.createElement("style"), { textContent: "@media print { @page { size: A4 portrait; margin: 0; } }" }));
+  document.body.append(root);
+  document.body.classList.add("printing");
+  await loadOsmd();
+  const osmd = new window.opensheetmusicdisplay.OpenSheetMusicDisplay(box, {
+    autoResize: false, backend: "svg", pageFormat: "A4_P", drawTitle: true, drawPartNames: true, drawingParameters: "default",
+  });
+  await osmd.load(r.xml);
+  osmd.render();
+  return root;
+}
+
+$("staff-btn").addEventListener("click", async () => {
+  const status = $("export-status");
+  status.textContent = "正在排五线谱…";
+  try {
+    if (!(await openStaffPrintView())) return (status.textContent = "没有能听到的声部。");
+    status.textContent = "在打印对话框里选“存储为 PDF”。";
+    requestAnimationFrame(() => setTimeout(() => window.print(), 100));
+  } catch (err) {
+    closePrintView();
+    status.textContent = `五线谱生成失败：${err.message}`;
+  }
+});
+
 async function exportWav(each) {
   const status = $("export-status");
   const s = currentSettings();
@@ -1680,7 +1747,7 @@ refreshLibrary();
 // 加 &id=我的谱子里的id 打印那一首，&solo=琵琶,笛子 只印这些声部
 (async () => {
   const q = new URLSearchParams(location.search);
-  if (q.get("print") !== "1") return;
+  if (q.get("print") !== "1" && q.get("print") !== "staff") return;
   if (q.get("id")) {
     try {
       const e = await lib.get(q.get("id"));
@@ -1697,5 +1764,7 @@ refreshLibrary();
     state.score.parts.forEach((p, i) => { settingsFor(p.name, i).solo = names.includes(p.name); });
     renderParts();
   }
-  openPrintView();
+  // print=staff：五线谱版
+  if (q.get("print") === "staff") openStaffPrintView().catch((err) => alert(err.message));
+  else openPrintView();
 })();

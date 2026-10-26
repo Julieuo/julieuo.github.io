@@ -162,9 +162,11 @@
         <button id="wav-btn" disabled>导出 WAV（当前混音）</button>
         <button id="wav-each-btn" disabled>每个声部分别导出 WAV</button>
         <button id="pdf-btn" disabled>导出 PDF（打印谱面）</button>
+        <button id="staff-btn" disabled title="转成五线谱并打开打印对话框">五线谱 PDF</button>
+        <button id="xml-btn" disabled title="MusicXML 文件，MuseScore、Finale、Sibelius 都能打开">五线谱 MusicXML</button>
         <span class="status" id="export-status"></span>
       </div>
-      <p class="hint">导出只包含当前能听到的声部（考虑静音和独奏）；MIDI 和 WAV 只含所选的小节范围，PDF 是整首。导出 PDF 会打开打印对话框，在里面选“存储为 PDF”。</p>
+      <p class="hint">导出只包含当前能听到的声部（考虑静音和独奏）；MIDI 和 WAV 只含所选的小节范围，PDF 和五线谱是整首。导出 PDF 会打开打印对话框，在里面选“存储为 PDF”。五线谱按当时的调写音名（1=D 就是 D 大调两个升号），只独奏一个声部就能导出单声部的分谱。</p>
     </section>
   </main>
 
